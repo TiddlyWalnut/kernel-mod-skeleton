@@ -25,6 +25,10 @@ static int major_number;
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
 
+static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
+static short  size_of_message;              ///< Used to remember the size of the string stored
+static int    numberOpens = 0;              ///< Counts the number of times the device is opened
+
 /**
  * Prototype functions for file operations.
  */
