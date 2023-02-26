@@ -147,8 +147,14 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
  */
 static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
+	int maxSize = 1024;
+	if (len > maxSize)
+	{
+		len = maxSize;
+	}
 	sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
-   	size_of_message = strlen(message);                 // store the length of the stored message
+   	// size_of_message = strlen(message);                 // store the length of the stored message
+	size_of_message = len;
    	printk(KERN_INFO "EBBChar: Received %zu characters from the user\n", len);
    	return len;
 }
