@@ -2,6 +2,7 @@
  * File:	lkmasg1.c
  * Adapted for Linux 5.15 by: John Aedo
  * Class:	COP4600-SP23
+ * By: Alan Rugeles, Dillon Garcia, John Ashley
  */
 
 #include <linux/module.h>	  // Core header for modules.
@@ -26,7 +27,7 @@ static struct class *lkmasg1Class = NULL;	///< The device-driver class struct po
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
 
 static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
-static short  size_of_message;              ///< Used to remember the size of the string stored
+static short  size_of_message = 0;              ///< Used to remember the size of the string stored
 static int    numberOpens = 0;              ///< Counts the number of times the device is opened
 
 /**
@@ -110,7 +111,7 @@ void cleanup_module(void)
 static int open(struct inode *inodep, struct file *filep)
 {
 	numberOpens++;
-   	printk(KERN_INFO "EBBChar: Device has been opened %d time(s)\n", numberOpens);
+   	printk(KERN_INFO "lkmasg1: device opened.\n");
    	return 0;
 }
 
@@ -125,36 +126,66 @@ static int close(struct inode *inodep, struct file *filep)
 
 /*
  * Reads from device, displays in userspace, and deletes the read data
+ * Copies from message to buffer
+ * @param filep A pointer to a file object (defined in linux/fs.h)
+ * @param buffer The pointer to the buffer to which this function writes the data
+ * @param len The length of the buffer
+ * @param offset The offset if required
  */
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset)
 {
 	int error_count = 0;
+	char tmp[sizeof(message)] = {0};
+	int i, j = 0;
+	
+	//if read operation request is more than size of message
+	//only service up to the amount available
+	if(len > size_of_message) {
+		len = size_of_message;
+	}
+
    	// copy_to_user has the format ( * to, *from, size) and returns 0 on success
-   	error_count = copy_to_user(buffer, message, size_of_message);
+   	error_count = copy_to_user(buffer, message, len);
  
-   	if (error_count==0){            // if true then have success
-      		printk(KERN_INFO "EBBChar: Sent %d characters to the user\n", size_of_message);
-      		return (size_of_message=0);  // clear the position to the start and return 0
+   	if (error_count == 0) {           // if true then have success
+      		printk(KERN_INFO "Sent %zu characters to the user: %s\n", len, buffer);
+			
+			//delete read data using temporary array
+			j = 0;
+			for(i = len; i < size_of_message; i++, j++) {
+				tmp[j] = message[i];
+			}
+			
+			size_of_message = size_of_message - len; // update size of message
+			strcpy(message, tmp);					 // copy the contents of message without read data
+
+      		return 0;  								 //Success -- return 0 
    	}
    	else {
-      		printk(KERN_INFO "EBBChar: Failed to send %d characters to the user\n", error_count);
+      		printk(KERN_INFO "Failed to send %d characters to the user\n", error_count);
       		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
    	}
 }
 
 /*
  * Writes to the device
+ * Appends buffer to message
+ * @param filep A pointer to a file object
+ * @param buffer The buffer to that contains the string to write to the device
+ * @param len The length of the array of data that is being passed in the const char buffer
+ * @param offset The offset if required
  */
 static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
-	int maxSize = 1024;
+	//check if there is enough space left in message (including null terminator)
+	int maxSize = (int)(sizeof(message)) - size_of_message - 1;
 	if (len > maxSize)
 	{
 		len = maxSize;
 	}
-	sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
-   	// size_of_message = strlen(message);                 // store the length of the stored message
-	size_of_message = len;
-   	printk(KERN_INFO "EBBChar: Received %zu characters from the user\n", len);
+	// sprintf(message, "%s(%zu letters)", buffer, len);                  	 
+	strncat(message, buffer, len);					//appends received string with length to message (with null terminator)
+	size_of_message = strlen(message);				//update the size of message
+   	printk(KERN_INFO "Received %zu characters from the user: %s\n", len, buffer);
    	return len;
 }
