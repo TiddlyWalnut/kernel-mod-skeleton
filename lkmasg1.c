@@ -26,7 +26,7 @@ static int major_number;
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
 
-static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
+static char   message[1025] = {0};           ///< Memory for the string that is passed from userspace
 static short  size_of_message = 0;              ///< Used to remember the size of the string stored
 static int    numberOpens = 0;              ///< Counts the number of times the device is opened
 
@@ -135,8 +135,7 @@ static int close(struct inode *inodep, struct file *filep)
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset)
 {
 	int error_count = 0;
-	char tmp[sizeof(message)] = {0};
-	int i, j = 0;
+	int i, j;
 	
 	//if read operation request is more than size of message
 	//only service up to the amount available
@@ -146,24 +145,23 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 
    	// copy_to_user has the format ( * to, *from, size) and returns 0 on success
    	error_count = copy_to_user(buffer, message, len);
- 
-   	if (error_count == 0) {           // if true then have success
+
+	//if true then have success
+   	if (error_count == 0) {           
       		printk(KERN_INFO "Sent %zu characters to the user: %s\n", len, buffer);
 			
-			//delete read data using temporary array
-			j = 0;
-			for(i = len; i < size_of_message; i++, j++) {
-				tmp[j] = message[i];
+			//delete read data 
+			for(i = 0, j = len; j < size_of_message; i++, j++) {
+				message[i] = message[j];
 			}
-			
-			size_of_message = size_of_message - len; // update size of message
-			strcpy(message, tmp);					 // copy the contents of message without read data
+			size_of_message = size_of_message - len;  //update size of message
+			message[size_of_message] = '\0';		  //add null terminator to mark end of string
 
       		return 0;  								 //Success -- return 0 
    	}
    	else {
       		printk(KERN_INFO "Failed to send %d characters to the user\n", error_count);
-      		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
+      		return -EFAULT;              //Failed -- return a bad address message (i.e. -14)
    	}
 }
 
